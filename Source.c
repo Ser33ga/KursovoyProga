@@ -1,3 +1,4 @@
+#define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 #include <locale.h>
 #include <math.h>
@@ -12,93 +13,117 @@ typedef struct {
     int count;
 } Incident;
 
+float calc_q(float x_curr, float x_prev);
+int check_state(float q, float limit);
+int check_incident(int state_web, int state_dbs, int state_iop);
+
 int main(void) {
+    float web, dbs, iop;
+    float web1 = 0.0f, web2 = 0.0f, web3 = 0.0f;
+    float dbs1 = 0.0f, dbs2 = 0.0f, dbs3 = 0.0f;
+    float iop1 = 0.0f, iop2 = 0.0f, iop3 = 0.0f;
+    float q_web, q_dbs, q_iop;
+    int state_web, state_dbs, state_iop;
+    int prob_count;
+    int is_incident;
+    int step = 0;
+    Incident inc;
+
     setlocale(LC_ALL, "Russian");
-
-    float web[POINTS_COUNT] = { 45.5f, 46.0f, 46.5f, 47.0f, 52.9f };
-    float dbs[POINTS_COUNT] = { 55.6f, 53.6f, 57.0f, 55.0f, 53.0f };
-    float iop[POINTS_COUNT] = { 33.9f, 33.1f, 32.4f, 31.6f, 30.9f };
-
-    float q_web[POINTS_COUNT] = { 0.0f };
-    float q_dbs[POINTS_COUNT] = { 0.0f };
-    float q_iop[POINTS_COUNT] = { 0.0f };
-
-    int state_web[POINTS_COUNT] = { 0 };
-    int state_dbs[POINTS_COUNT] = { 0 };
-    int state_iop[POINTS_COUNT] = { 0 };
-
-    Incident incidents[POINTS_COUNT];
-    int incident_count = 0;
-
-    int i;
 
     printf("Контроль облачной инфраструктуры (Вариант 3, КТ1)\n\n");
 
-    printf("Исходные данные телеметрии:\n");
-    printf("Отсчет\tWEB\tDBS\tIOP\n");
-    for (i = 0; i < POINTS_COUNT; i++) {
-        printf("%d\t%.1f\t%.1f\t%.1f\n", i + 1, web[i], dbs[i], iop[i]);
-    }
-    printf("\n");
+    while (step < POINTS_COUNT) {
+        printf("Отсчет %d - введите WEB DBS IOP: ", step + 1);
 
-    for (i = K_PARAM; i < POINTS_COUNT; i++) {
-        q_web[i] = 100.0f * (web[i] - web[i - K_PARAM]) / ((fabsf(web[i]) + fabsf(web[i - K_PARAM])) / 2.0f);
-        q_dbs[i] = 100.0f * (dbs[i] - dbs[i - K_PARAM]) / ((fabsf(dbs[i]) + fabsf(dbs[i - K_PARAM])) / 2.0f);
-        q_iop[i] = 100.0f * (iop[i] - iop[i - K_PARAM]) / ((fabsf(iop[i]) + fabsf(iop[i - K_PARAM])) / 2.0f);
-    }
-
-    printf("Симметрированное относительное изменение Q (%%) при k = %d:\n", K_PARAM);
-    printf("Отсчет\tQ(WEB)\t\tQ(DBS)\t\tQ(IOP)\n");
-    for (i = K_PARAM; i < POINTS_COUNT; i++) {
-        printf("%d\t%+7.2f%%\t%+7.2f%%\t%+7.2f%%\n", i + 1, q_web[i], q_dbs[i], q_iop[i]);
-    }
-    printf("\n");
-
-    for (i = 0; i < POINTS_COUNT; i++) {
-        int prob_count = 0;
-
-        if (i >= K_PARAM) {
-            if (q_web[i] < -L_LIMIT || q_web[i] > L_LIMIT) {
-                state_web[i] = 1;
-            }
-            if (q_dbs[i] < -L_LIMIT || q_dbs[i] > L_LIMIT) {
-                state_dbs[i] = 1;
-            }
-            if (q_iop[i] < -L_LIMIT || q_iop[i] > L_LIMIT) {
-                state_iop[i] = 1;
-            }
+        if (scanf("%f", &web) != 1 || web == -99999.0f) {
+            break;
+        }
+        if (scanf("%f", &dbs) != 1 || dbs == -99999.0f) {
+            break;
+        }
+        if (scanf("%f", &iop) != 1 || iop == -99999.0f) {
+            break;
         }
 
-        prob_count = state_web[i] + state_dbs[i] + state_iop[i];
+        step++;
 
-        if (state_web[i] && (state_dbs[i] || state_iop[i])) {
-            incidents[incident_count].time = i + 1;
-            incidents[incident_count].type = 1;
-            incidents[incident_count].count = prob_count;
-            incident_count++;
+        if (step == 1) {
+            web1 = web;
+            dbs1 = dbs;
+            iop1 = iop;
+            printf("Отсчет %d: накопление окна (1/%d). НОРМА. Инцидентов нет.\n\n", step, K_PARAM);
+        } else if (step == 2) {
+            web2 = web;
+            dbs2 = dbs;
+            iop2 = iop;
+            printf("Отсчет %d: накопление окна (2/%d). НОРМА. Инцидентов нет.\n\n", step, K_PARAM);
+        } else if (step == 3) {
+            web3 = web;
+            dbs3 = dbs;
+            iop3 = iop;
+            printf("Отсчет %d: окно заполнено (3/%d). НОРМА. Инцидентов нет.\n\n", step, K_PARAM);
+        } else {
+            q_web = calc_q(web, web1);
+            q_dbs = calc_q(dbs, dbs1);
+            q_iop = calc_q(iop, iop1);
+
+            state_web = check_state(q_web, L_LIMIT);
+            state_dbs = check_state(q_dbs, L_LIMIT);
+            state_iop = check_state(q_iop, L_LIMIT);
+
+            is_incident = check_incident(state_web, state_dbs, state_iop);
+            prob_count = state_web + state_dbs + state_iop;
+
+            printf("Отсчет %d:\n", step);
+            printf("  WEB: %.1f, Q = %+6.2f%% (%s)\n", web, q_web, state_web ? "ТРЕВОГА" : "НОРМА");
+            printf("  DBS: %.1f, Q = %+6.2f%% (%s)\n", dbs, q_dbs, state_dbs ? "ТРЕВОГА" : "НОРМА");
+            printf("  IOP: %.1f, Q = %+6.2f%% (%s)\n", iop, q_iop, state_iop ? "ТРЕВОГА" : "НОРМА");
+
+            if (is_incident) {
+                inc.time = step;
+                inc.type = 1;
+                inc.count = prob_count;
+                printf("  Инцидент зафиксирован (тип %d, проблемных узлов: %d)\n\n", inc.type, inc.count);
+            } else {
+                printf("  Инцидентов нет.\n\n");
+            }
+
+            web1 = web2;
+            web2 = web3;
+            web3 = web;
+
+            dbs1 = dbs2;
+            dbs2 = dbs3;
+            dbs3 = dbs;
+
+            iop1 = iop2;
+            iop2 = iop3;
+            iop3 = iop;
         }
     }
 
-    printf("Состояние компонентов (порог L = %.1f%%):\n", L_LIMIT);
-    printf("Отсчет\tWEB\t\tDBS\t\tIOP\n");
-    for (i = 0; i < POINTS_COUNT; i++) {
-        printf("%d\t%s\t%s\t%s\n",
-            i + 1,
-            state_web[i] ? "ТРЕВОГА" : "НОРМА  ",
-            state_dbs[i] ? "ТРЕВОГА" : "НОРМА  ",
-            state_iop[i] ? "ТРЕВОГА" : "НОРМА  ");
-    }
-    printf("\n");
+    return 0;
+}
 
-    printf("Журнал инцидентов (WEB в тревоге + сбой других узлов):\n");
-    if (incident_count == 0) {
-        printf("Инцидентов не обнаружено.\n");
-    } else {
-        for (i = 0; i < incident_count; i++) {
-            printf("Отсчет %d: зафиксирован инцидент (тип %d, проблемных узлов: %d)\n",
-                incidents[i].time, incidents[i].type, incidents[i].count);
-        }
+float calc_q(float x_curr, float x_prev) {
+    float denom = (fabsf(x_curr) + fabsf(x_prev)) / 2.0f;
+    if (denom < 1e-6f) {
+        return 0.0f;
     }
+    return 100.0f * (x_curr - x_prev) / denom;
+}
 
+int check_state(float q, float limit) {
+    if (q < -limit || q > limit) {
+        return 1;
+    }
+    return 0;
+}
+
+int check_incident(int state_web, int state_dbs, int state_iop) {
+    if (state_web == 1 && (state_dbs == 1 || state_iop == 1)) {
+        return 1;
+    }
     return 0;
 }
